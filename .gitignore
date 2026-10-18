@@ -5,3 +5,17 @@ __pycache__/
 .DS_Store
 results/
 .venv/
+
+.claude/
+.claude-*
+*.claude.md
+docs/superpowers/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursor/
+.aider*
+*.session.json
+*.transcript.*
+notes/scratch/
+*.scratch.*
