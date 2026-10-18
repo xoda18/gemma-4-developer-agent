@@ -1,76 +1,81 @@
-# Конспект по соревнованию
+# Competition notes
 
-Источник: официальный `HARNESS_README.md` из датасета соревнования (библиотеки `swegemma`, `adk-submission`, `adk-eval-core`).
+Source: the official `HARNESS_README.md` from the competition dataset
+(`swegemma`, `adk-submission`, `adk-eval-core` libraries).
 
-## Суть задачи
+## The task
 
-Нужно собрать (через декларативный YAML-конфиг, без своего Python-кода) автономного
-агента на базе Gemma 4, который чинит реальные issue в Python-репозиториях:
-читает код, редактирует файлы, запускает тесты и отправляет патч.
+Build (via a declarative YAML config, no custom Python code) an autonomous
+agent based on Gemma 4 that fixes real issues in Python repositories: reads
+code, edits files, runs tests, and submits a patch.
 
-Метрика — **Resolution Rate**: доля задач, для которых патч агента проходит
-скрытые тесты (`pytest`, JUnit XML, `exit_code == 0`, без `FAIL`/`ERROR`).
+Metric: **Resolution Rate** — the fraction of tasks whose agent patch
+passes the hidden tests (`pytest`, JUnit XML, `exit_code == 0`, no
+`FAIL`/`ERROR`).
 
-## Формат сабмишена
+## Submission format
 
-Не предсказания, а **декларативный агент**: zip-архив с `agent.yaml` **в корне**
-(не `submission/agent.yaml`!). Весь код агента выполняется YAML-конфигом,
-который харнесс компилирует в дерево ADK-агентов — свой Python-код исполнять нельзя.
+Not predictions — a **declarative agent**: a zip archive with `agent.yaml`
+**at the root** (not `submission/agent.yaml`!). All agent behavior is
+defined by the YAML config, which the harness compiles into a tree of ADK
+agents — you cannot run your own Python code.
 
 ```
 submission.zip
-├── agent.yaml              # REQUIRED, единственный root-конфиг
-├── eval_config.yaml        # опционально: лимиты на таск (time/tool_calls/turns)
-├── configs/sampling.yaml   # температура, top_p, thinking_budget и т.д.
-├── prompts/*.md            # системные промпты, подключаются через !include
-├── sub_agents/*.yaml       # под-агенты (например, read-only code_analyzer)
-├── adapters/<name>/        # опционально: LoRA (adapter_config.json + adapter_model.safetensors)
-└── skills/                 # опционально: ADK skills (SKILL.md)
+├── agent.yaml              # REQUIRED, the single root config
+├── eval_config.yaml        # optional: per-task limits (time/tool_calls/turns)
+├── configs/sampling.yaml   # temperature, top_p, thinking_budget, etc.
+├── prompts/*.md            # system prompts, included via !include
+├── sub_agents/*.yaml       # sub-agents (e.g. read-only code_analyzer)
+├── adapters/<name>/        # optional: LoRA (adapter_config.json + adapter_model.safetensors)
+└── skills/                 # optional: ADK skills (SKILL.md)
 ```
 
-Разрешённые модели (ровно одна на весь сабмишен):
+Allowed models (exactly one per submission):
 `gemma-4-31b-it-qat-w4a16-ct`, `gemma-4-12b-it-qat-w4a16-ct`,
 `gemma-4-e4b-it-qat-w4a16-ct`, `gemma-4-e2b-it-qat-w4a16-ct`.
 
-Лимит размера архива — **3 GiB** (вместе с адаптерами).
+Archive size limit: **3 GiB** (including adapters).
 
-## Доступные инструменты агента (9 штук)
+## Available agent tools (9 total)
 
-- `run_command`, `read_file`, `edit_file`, `write_file` — работа с кодом/шеллом в `/workspace`
-- `get_status`, `submit_patch` — бюджет и финализация патча
-- `get_code_neighbors`, `search_similar_code`, `get_code_subgraph` — поиск по графу кода (доступен не для всех репо)
+- `run_command`, `read_file`, `edit_file`, `write_file` — code/shell access inside `/workspace`
+- `get_status`, `submit_patch` — budget tracking and patch finalization
+- `get_code_neighbors`, `search_similar_code`, `get_code_subgraph` — code graph search (not available for every repo)
 
-Подробные сигнатуры и форматы ответов — см. раздел 6 `HARNESS_README.md`
-(скачивается в `data/HARNESS_README.md` через `scripts/download_data.sh`).
+Full signatures and response formats are in section 6 of `HARNESS_README.md`
+(downloaded to `data/HARNESS_README.md` via `scripts/download_data.sh`).
 
-## Как проходит оценка (кратко)
+## How evaluation works (summary)
 
-1. **Container A** (агент): снапшот репо на `base_commit`, агент работает до
-   `submit_patch()` / таймаута / исчерпания бюджета → извлекается `agent_patch`.
-2. **Container B** (проверка): чистый снапшот + `agent_patch` + `task.test_patch`
-   → `pytest` → задача resolved, если exit code 0 и все нужные тесты прошли.
+1. **Container A** (agent): snapshot of the repo at `base_commit`, the agent
+   works until `submit_patch()` / timeout / budget exhaustion → `agent_patch`
+   is extracted.
+2. **Container B** (verification): clean snapshot + `agent_patch` +
+   `task.test_patch` → `pytest` → task is resolved if the exit code is 0 and
+   all required tests pass.
 
-Изменения тестовых файлов (`test_*.py`, `conftest.py`, `pytest.ini` и т.д.)
-из патча агента **вырезаются** перед верификацией — чинить нужно только
-исходный код библиотеки.
+Any changes to test files (`test_*.py`, `conftest.py`, `pytest.ini`, etc.)
+in the agent's patch are **stripped out** before verification — only the
+library's source code should be fixed.
 
-## Данные соревнования (`data/`, не коммитятся)
+## Competition data (`data/`, not committed)
 
-- `tasks.jsonl` — 129 задач (репозитории: fastapi, rich, requests, httpx):
+- `tasks.jsonl` — 129 tasks (repos: fastapi, rich, requests, httpx):
   `instance_id`, `repo`, `base_commit`, `patch`, `test_patch`,
   `problem_statement`, `hints_text`, `created_at`.
-- `snapshots/` (~20 ГБ) — архивы репозиториев на нужных коммитах.
-- `graphs/`, `embeddings/` (~850 МБ) — графы кода и эмбеддинги для
-  `get_code_neighbors` / `search_similar_code` / `get_code_subgraph`.
-- `wheels/` — офлайн-кэш Python-пакетов для песочницы (сеть отключена).
-- `sample_submission/` — официальный baseline-сабмишен (на нём основан `submission/` в этом репо).
+- `snapshots/` (~20 GB) — repository archives at the relevant commits.
+- `graphs/`, `embeddings/` (~850 MB combined) — code graphs and embeddings
+  for `get_code_neighbors` / `search_similar_code` / `get_code_subgraph`.
+- `wheels/` — offline cache of Python packages for the sandbox (no network access).
+- `sample_submission/` — the official baseline submission (`submission/` in this repo is based on it).
 
-Полный датасет качается через `make download-data-full` (используется CLI `kaggle`).
+The full dataset can be downloaded with `make download-data-full` (uses the `kaggle` CLI).
 
-## Локальная проверка (если нужно гонять харнесс)
+## Local evaluation (if you need to run the harness)
 
-Требует установленных пакетов `swegemma`, `adk-submission`, `adk-eval-core`
-(ставятся из датасета соревнования, не из этого репо) и Docker:
+Requires the `swegemma`, `adk-submission`, `adk-eval-core` packages
+(installed from the competition dataset, not from this repo) and Docker:
 
 ```bash
 swegemma eval \
@@ -81,5 +86,4 @@ swegemma eval \
   --sandbox docker
 ```
 
-В минимальном шаблоне этого репозитория такой раннер не настроен —
-это задел на будущее.
+This minimal template does not set up such a runner — that's a future step.
