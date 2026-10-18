@@ -1,0 +1,21 @@
+# Root agent config for the Gemma 4 Developer Agent competition.
+# REQUIRED to sit at the root of submission.zip.
+# Model must be one of: gemma-4-31b-it-qat-w4a16-ct, gemma-4-12b-it-qat-w4a16-ct,
+# gemma-4-e4b-it-qat-w4a16-ct, gemma-4-e2b-it-qat-w4a16-ct.
+name: swe_baseline_agent
+model: gemma-4-31b-it-qat-w4a16-ct
+instruction: !include prompts/system.md
+tools:
+  - run_command
+  - read_file
+  - edit_file
+  - write_file
+  - get_status
+  - submit_patch
+  - get_code_neighbors
+  - search_similar_code
+  - get_code_subgraph
+  - agent_tool:
+      config_path: sub_agents/code_analyzer.yaml
+      skip_summarization: true
+generate_content_config: !include configs/sampling.yaml
