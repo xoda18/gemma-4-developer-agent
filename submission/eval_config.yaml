@@ -1,5 +1,5 @@
 # Optional per-task evaluation budget overrides for local `swegemma eval` runs.
-# See docs/NOTES.md for the full list of defaults used by the official scorer.
+# See the competition's HARNESS_README.md for the full list of scorer defaults.
 evaluation:
   timeout_seconds: 60
   max_tool_calls: 10
